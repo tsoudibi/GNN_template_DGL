@@ -4,18 +4,18 @@ from model.model import *
 
 os.environ["DGLBACKEND"] = "pytorch"
 
-class GNN_trainer():
+class GNN_trainer_node_classification():
     '''
     node classification trainer
     '''
     def __init__(self):
         self.num_classes = Cora_dataset().num_classes
         self.dataset = Cora_dataset()[0].to('cuda') # pick the first graph in the dataset
-        self.model = GCN(self.dataset.ndata["feat"].shape[1], 16, self.num_classes).to('cuda')
+        self.model = GCN_node_classification(self.dataset.ndata["feat"].shape[1], 16, self.num_classes).to('cuda')
         
-    def train(self, dataset, model):
-        g = dataset
-        optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    def train(self):
+        g = self.dataset
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=0.01)
         best_val_acc = 0
         best_test_acc = 0
 
@@ -26,7 +26,7 @@ class GNN_trainer():
         test_mask = g.ndata["test_mask"]
         for e in range(1000):
             # Forward
-            logits = model(g, features)
+            logits = self.model(g, features)
 
             # Compute prediction
             pred = logits.argmax(1)
@@ -54,3 +54,41 @@ class GNN_trainer():
                 print(
                     f"In epoch {e}, loss: {loss:.3f}, val acc: {val_acc:.3f} (best {best_val_acc:.3f}), test acc: {test_acc:.3f} (best {best_test_acc:.3f})"
                 )
+                
+class GNN_trainer_graph_classification():
+    '''
+    graph classification trainer
+    '''
+    def __init__(self):
+        
+        self.num_classes = Protine_dataset().num_classes
+        self.dataset = Protine_dataset()
+        # make data loader
+        self.train_dataloader, self.test_dataloader = make_data_loader(self.dataset, split_rate = 0.8)
+        
+        self.model = GCN_graph_classification(self.dataset.dim_nfeats, 16, self.dataset.gclasses).to('cuda')
+        
+    def train(self):
+        
+        # Create the model with given dimensions
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=0.01)
+
+        for epoch in range(100):
+            for batched_graph, labels in self.train_dataloader:
+                pred = self.model(batched_graph.to('cuda'), batched_graph.ndata["attr"].float().to('cuda'))
+                loss = F.cross_entropy(pred, labels.to('cuda'))
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+            print(
+                    f"In epoch {epoch}, loss: {loss:.3f}"
+                )
+
+        num_correct = 0
+        num_tests = 0
+        for batched_graph, labels in self.test_dataloader:
+            pred = self.model(batched_graph.to('cuda'), batched_graph.ndata["attr"].float().to('cuda'))
+            num_correct += (pred.argmax(1) == labels.to('cuda')).sum().item()
+            num_tests += len(labels)
+
+        print("Test accuracy:", num_correct / num_tests)
