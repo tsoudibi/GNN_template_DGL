@@ -74,16 +74,17 @@ class GNN_trainer_graph_classification():
         optimizer = torch.optim.Adam(self.model.parameters(), lr=0.01)
 
         for epoch in range(100):
-            for batched_graph, labels in self.train_dataloader:
+            epoch_loss = 0
+            for iter, (batched_graph, labels) in enumerate(self.train_dataloader):
                 pred = self.model(batched_graph.to('cuda'), batched_graph.ndata["attr"].float().to('cuda'))
                 loss = F.cross_entropy(pred, labels.to('cuda'))
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
+                epoch_loss += loss.detach().item()
+            epoch_loss /= (iter + 1)
             print(
-                    f"In epoch {epoch}, loss: {loss:.3f}"
-                )
-
+                    f"In epoch {epoch}, loss: {loss:.3f}")
         num_correct = 0
         num_tests = 0
         for batched_graph, labels in self.test_dataloader:
